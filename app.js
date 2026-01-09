@@ -26,6 +26,7 @@ const els = {
   m2Progress: $("#m2Progress"),
   m3Progress: $("#m3Progress"),
   sequenceBar: $("#sequenceBar"),
+  ttsSpeedSelect: $("#ttsSpeedSelect"),
 
   // players
   playerSelect: $("#playerSelect"),
@@ -51,6 +52,15 @@ const PLAYERS = ["西瓜", "柚子", "小樂", "阿噗", "安安"];
 const STORAGE_PREFIX = "zhuyin_game_v2"; // v2 because we add wrongbook structure
 const KEY_ACTIVE_PLAYER = `${STORAGE_PREFIX}:active_player`;
 function keyForPlayer(player) { return `${STORAGE_PREFIX}:player:${player}`; }
+const KEY_TTS_SPEED = `${STORAGE_PREFIX}:tts_speed`;
+function loadTtsSpeed() {
+  const v = localStorage.getItem(KEY_TTS_SPEED);
+  if (v === "slow" || v === "normal" || v === "fast") return v;
+  return "normal";
+}
+function saveTtsSpeed(v) {
+  localStorage.setItem(KEY_TTS_SPEED, v);
+}
 
 const GRID_COLS = 7;
 
@@ -61,6 +71,7 @@ const state = {
   // settings
   soundOn: true,
   ttsOn: true,
+  ttsSpeed: "normal", // "slow" | "normal" | "fast"
 
   // player
   player: PLAYERS[0],
@@ -169,8 +180,11 @@ function speakZhuyin(text) {
   window.speechSynthesis.cancel();
 
   const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.9;
-  u.pitch = 1.0;
+  const rateMap = { slow: 0.60, normal: 0.75, fast: 0.95 };
+u.rate = rateMap[state.ttsSpeed] ?? 0.75;
+u.pitch = 0.55;
+u.volume = 0.55;
+
 
   const voices = window.speechSynthesis.getVoices?.() || [];
   const preferred =
@@ -835,6 +849,16 @@ function bindUI() {
 
   els.soundToggle.addEventListener("change", (e) => { state.soundOn = !!e.target.checked; });
   els.ttsToggle.addEventListener("change", (e) => { state.ttsOn = !!e.target.checked; });
+// 初始化速度（讀取記憶）
+state.ttsSpeed = loadTtsSpeed();
+if (els.ttsSpeedSelect) {
+  els.ttsSpeedSelect.value = state.ttsSpeed;
+  els.ttsSpeedSelect.addEventListener("change", (e) => {
+    const v = e.target.value;
+    state.ttsSpeed = v;
+    saveTtsSpeed(v);
+  });
+}
 
   // voices warm-up
   document.addEventListener("click", () => {
