@@ -1,7 +1,6 @@
 // 注音練習小遊戲（GitHub Pages / 純前端）
-// 模式1：聽音選正確注音（答對自動下一題，答錯需按下一題）
-// 模式2：找出所有目標（目標多個、可重複，找完自動下一題）
-// 模式3：依序散找（序列散在符號海裡，點錯閃紅「保留進度」）
+// + 玩家切換（西瓜/柚子/小樂/阿噗/安安）
+// + 各自分數/錯誤 localStorage 獨立保存
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -24,34 +23,41 @@ const els = {
   m2Progress: $("#m2Progress"),
   m3Progress: $("#m3Progress"),
   sequenceBar: $("#sequenceBar"),
+
+  // NEW
+  playerSelect: $("#playerSelect"),
+  btnResetPlayer: $("#btnResetPlayer"),
 };
+
+const PLAYERS = ["西瓜", "柚子", "小樂", "阿噗", "安安"];
+const STORAGE_PREFIX = "zhuyin_game_v1";
+const KEY_ACTIVE_PLAYER = `${STORAGE_PREFIX}:active_player`;
+
+function keyForPlayer(player) {
+  return `${STORAGE_PREFIX}:player:${player}`;
+}
 
 const state = {
   data: null,
   mode: 1,
-  score: 0,
-  wrong: 0,
+
+  // settings
   soundOn: true,
   ttsOn: true,
 
+  // player
+  player: PLAYERS[0],
+  score: 0,
+  wrong: 0,
+
   // mode1
-  m1: {
-    bag: [],
-    current: null, // {target, options[], locked, wrongOnce}
-    locked: false,
-    wrongOnce: false
-  },
+  m1: { bag: [], current: null, locked: false, wrongOnce: false },
 
   // mode2
-  m2: {
-    level: null, // {target, targetCount, cells[]}
-  },
+  m2: { level: null },
 
   // mode3
-  m3: {
-    level: null, // {sequence, cells[]}
-    stepIndex: 0,
-  }
+  m3: { level: null, stepIndex: 0 }
 };
 
 const GRID_COLS = 7;
@@ -75,11 +81,7 @@ function randInt(min, max) {
 function setGridCols(el, cols) {
   el.style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
 }
-function updateStats() {
-  els.score.textContent = String(state.score);
-  els.wrong.textContent = String(state.wrong);
-}
-function setQuestion(title, sub="") {
+function setQuestion(title, sub = "") {
   els.qTitle.textContent = title;
   els.qSub.textContent = sub;
 }
@@ -88,12 +90,52 @@ function showMode(mode) {
   els.mode1.classList.toggle("hidden", mode !== 1);
   els.mode2.classList.toggle("hidden", mode !== 2);
   els.mode3.classList.toggle("hidden", mode !== 3);
-
   els.modeBtns.forEach(btn => btn.classList.toggle("active", Number(btn.dataset.mode) === mode));
 }
 function flashWrong(dom) {
   dom.classList.add("flash-wrong");
   setTimeout(() => dom.classList.remove("flash-wrong"), 450);
+}
+
+// ---------- storage ----------
+function loadActivePlayer() {
+  const saved = localStorage.getItem(KEY_ACTIVE_PLAYER);
+  if (saved && PLAYERS.includes(saved)) return saved;
+  return PLAYERS[0];
+}
+function saveActivePlayer(player) {
+  localStorage.setItem(KEY_ACTIVE_PLAYER, player);
+}
+
+function loadPlayerData(player) {
+  try {
+    const raw = localStorage.getItem(keyForPlayer(player));
+    if (!raw) return { score: 0, wrong: 0 };
+    const obj = JSON.parse(raw);
+    return {
+      score: Number(obj?.score || 0),
+      wrong: Number(obj?.wrong || 0),
+    };
+  } catch (_) {
+    return { score: 0, wrong: 0 };
+  }
+}
+function savePlayerData(player) {
+  const payload = { score: state.score, wrong: state.wrong };
+  localStorage.setItem(keyForPlayer(player), JSON.stringify(payload));
+}
+
+function resetCurrentPlayer() {
+  state.score = 0;
+  state.wrong = 0;
+  savePlayerData(state.player);
+  updateStats();
+}
+
+// ---------- stats ----------
+function updateStats() {
+  els.score.textContent = String(state.score);
+  els.wrong.textContent = String(state.wrong);
 }
 
 // ---------- sound ----------
@@ -122,14 +164,12 @@ function speakZhuyin(text) {
   if (!state.ttsOn) return;
   if (!("speechSynthesis" in window)) return;
 
-  // 取消前一段避免疊音
   window.speechSynthesis.cancel();
 
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.9;
   u.pitch = 1.0;
 
-  // 盡量選 zh-TW / zh-Hant 的 voice
   const voices = window.speechSynthesis.getVoices?.() || [];
   const preferred =
     voices.find(v => (v.lang || "").toLowerCase().includes("zh-tw")) ||
@@ -138,7 +178,6 @@ function speakZhuyin(text) {
     null;
 
   if (preferred) u.voice = preferred;
-
   window.speechSynthesis.speak(u);
 }
 
@@ -158,8 +197,6 @@ function nextMode1() {
   if (!state.m1.bag.length) refillM1Bag();
 
   const target = state.m1.bag.pop();
-
-  // options: target + 3 random others
   const pool = state.data.zhuyin.filter(z => z !== target);
   const others = sampleUnique(pool, 3);
   const options = shuffle([target, ...others]);
@@ -168,10 +205,8 @@ function nextMode1() {
   state.m1.locked = false;
   state.m1.wrongOnce = false;
 
-  setQuestion("模式 1：聽音選出正確注音", "按「重播」聽發音，點選正確符號。答對自動下一題。");
+  setQuestion(`模式 1：聽音選出正確注音（${state.player}）`, "按「重播」聽發音，點選正確符號。答對自動下一題。");
   renderMode1();
-
-  // 進題就先念一次
   speakZhuyin(target);
 }
 
@@ -185,6 +220,7 @@ function renderMode1() {
     btn.className = "choice";
     btn.type = "button";
     btn.textContent = sym;
+
     btn.addEventListener("click", () => {
       if (state.m1.locked) return;
 
@@ -192,44 +228,43 @@ function renderMode1() {
       if (correct) {
         btn.classList.add("correct");
         beep("good");
+
         state.score += 10;
         updateStats();
-        state.m1.locked = true;
+        savePlayerData(state.player);
 
-        // 答對自動跳題
-        setTimeout(() => {
-          startRound();
-        }, 380);
+        state.m1.locked = true;
+        setTimeout(() => startRound(), 380);
       } else {
         btn.classList.add("wrong");
         beep("bad");
+
         state.wrong += 1;
         state.score = Math.max(0, state.score - 2);
         updateStats();
-        state.m1.wrongOnce = true;
+        savePlayerData(state.player);
 
-        // 答錯不自動跳題：需要按「下一題」
-        setQuestion("模式 1：再試一次或按下一題", `目標正在念：${cur.target}（可按重播）`);
+        state.m1.wrongOnce = true;
+        setQuestion(`模式 1：再試一次或按下一題（${state.player}）`, `目標正在念：${cur.target}（可按重播）`);
       }
     });
+
     els.choices.appendChild(btn);
   });
 }
 
 function replayMode1() {
   const cur = state.m1.current;
-  if (!cur) return;
-  speakZhuyin(cur.target);
+  if (cur) speakZhuyin(cur.target);
 }
 
 // ---------- Mode 2 ----------
 function createMode2Level() {
   const zh = state.data.zhuyin;
-
   const target = zh[randInt(0, zh.length - 1)];
-  const gridSize = 42;                 // 固定 7*6
-  const targetCount = randInt(5, 10);  // 目標出現數
-  const decoyUniqueCount = 14;         // 干擾種類數
+  const gridSize = 42;
+  const targetCount = randInt(5, 10);
+  const decoyUniqueCount = 14;
 
   const decoyPool = zh.filter(z => z !== target);
   const decoyTypes = sampleUnique(decoyPool, decoyUniqueCount);
@@ -255,9 +290,12 @@ function nextMode2() {
   state.m2.level = createMode2Level();
   setGridCols(els.grid2, GRID_COLS);
 
-  setQuestion("模式 2：找出全部目標", `請找出所有「${state.m2.level.target}」`);
+  setQuestion(`模式 2：找出全部目標（${state.player}）`, `請找出所有「${state.m2.level.target}」`);
   updateMode2Progress();
   renderMode2();
+
+  // 親子友善：進題念一次目標
+  speakZhuyin(state.m2.level.target);
 }
 
 function updateMode2Progress() {
@@ -283,11 +321,13 @@ function renderMode2() {
       if (cell.isTarget) {
         cell.found = true;
         lv.foundCount += 1;
+
         state.score += 5;
         beep("good");
         updateStats();
-        d.classList.add("found");
+        savePlayerData(state.player);
 
+        d.classList.add("found");
         updateMode2Progress();
 
         if (lv.foundCount >= lv.targetCount) {
@@ -299,6 +339,7 @@ function renderMode2() {
         state.score = Math.max(0, state.score - 1);
         beep("bad");
         updateStats();
+        savePlayerData(state.player);
         flashWrong(d);
       }
     });
@@ -309,12 +350,16 @@ function renderMode2() {
 
 function replayMode2() {
   const lv = state.m2.level;
-  if (!lv) return;
-  // 模式2不一定需要念，但你也可以念目標一次（更親子）
-  speakZhuyin(lv.target);
+  if (lv) speakZhuyin(lv.target);
 }
 
 // ---------- Mode 3 ----------
+function pickRandomSequence() {
+  const seqs = state.data.sequences || [["ㄅ","ㄆ","ㄇ"]];
+  const chosen = seqs[randInt(0, seqs.length - 1)];
+  return chosen.slice();
+}
+
 function createMode3Level(sequence) {
   const zh = state.data.zhuyin;
   const gridSize = 42;
@@ -328,7 +373,7 @@ function createMode3Level(sequence) {
   const symbols = sequence.slice();
 
   if (allowExtraTargets) {
-    const extraCount = randInt(0, sequence.length); // 0~len
+    const extraCount = randInt(0, sequence.length);
     for (let i = 0; i < extraCount; i++) {
       symbols.push(sequence[randInt(0, sequence.length - 1)]);
     }
@@ -348,13 +393,6 @@ function createMode3Level(sequence) {
   return { sequence, cells };
 }
 
-function pickRandomSequence() {
-  const seqs = state.data.sequences || [["ㄅ","ㄆ","ㄇ"]];
-  const chosen = seqs[randInt(0, seqs.length - 1)];
-  // 複製避免被改動
-  return chosen.slice();
-}
-
 function nextMode3() {
   const sequence = pickRandomSequence();
   state.m3.level = createMode3Level(sequence);
@@ -362,9 +400,10 @@ function nextMode3() {
 
   setGridCols(els.grid3, GRID_COLS);
 
-  setQuestion("模式 3：依序散找（保留進度）", `依序點：${sequence.join(" → ")}`);
+  setQuestion(`模式 3：依序散找（保留進度｜${state.player}）`, `依序點：${sequence.join(" → ")}`);
   renderMode3();
-  updateMode3ProgressExplain();
+  // 進題念第一個
+  speakZhuyin(sequence[0]);
 }
 
 function updateMode3ProgressExplain() {
@@ -372,15 +411,16 @@ function updateMode3ProgressExplain() {
   if (!lv) return;
   const idx = state.m3.stepIndex;
   const next = lv.sequence[idx] ?? "完成";
-  els.m3Progress.textContent = `下一個：${next}（${Math.min(idx+1, lv.sequence.length)}/${lv.sequence.length}）`;
+  els.m3Progress.textContent = `下一個：${next}（${Math.min(idx + 1, lv.sequence.length)}/${lv.sequence.length}）`;
 }
 
 function renderSequenceBar() {
   const lv = state.m3.level;
   if (!lv) return;
-  const idx = state.m3.stepIndex;
 
+  const idx = state.m3.stepIndex;
   els.sequenceBar.innerHTML = "";
+
   lv.sequence.forEach((sym, i) => {
     const pill = document.createElement("div");
     pill.className = "seqItem";
@@ -413,10 +453,12 @@ function renderMode3() {
       if (cell.symbol === expected) {
         cell.done = true;
         d.classList.add("found");
+
         state.m3.stepIndex += 1;
         state.score += 8;
         beep("good");
         updateStats();
+        savePlayerData(state.player);
 
         renderSequenceBar();
         updateMode3ProgressExplain();
@@ -424,13 +466,19 @@ function renderMode3() {
         if (state.m3.stepIndex >= lv.sequence.length) {
           setQuestion("🎉 序列完成！", "自動進入下一題…");
           setTimeout(() => startRound(), 560);
+        } else {
+          // 念下一個
+          const next = lv.sequence[state.m3.stepIndex];
+          speakZhuyin(next);
         }
       } else {
-        // 點錯：閃紅 + 記錯，但「保留進度」
+        // 點錯：閃紅 + 記錯，但保留進度
         state.wrong += 1;
         state.score = Math.max(0, state.score - 1);
         beep("bad");
         updateStats();
+        savePlayerData(state.player);
+
         flashWrong(d);
       }
     });
@@ -446,19 +494,63 @@ function replayMode3() {
   if (next) speakZhuyin(next);
 }
 
-// ---------- Round control ----------
+// ---------- round control ----------
 function startRound() {
   if (!state.data) return;
-
   if (state.mode === 1) nextMode1();
   if (state.mode === 2) nextMode2();
   if (state.mode === 3) nextMode3();
 }
-
 function replay() {
   if (state.mode === 1) replayMode1();
   if (state.mode === 2) replayMode2();
   if (state.mode === 3) replayMode3();
+}
+
+// ---------- players UI ----------
+function initPlayersUI() {
+  if (!els.playerSelect) return;
+
+  // fill select
+  els.playerSelect.innerHTML = "";
+  PLAYERS.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    els.playerSelect.appendChild(opt);
+  });
+
+  // load active
+  state.player = loadActivePlayer();
+  els.playerSelect.value = state.player;
+
+  // load their data
+  const pd = loadPlayerData(state.player);
+  state.score = pd.score;
+  state.wrong = pd.wrong;
+  updateStats();
+
+  els.playerSelect.addEventListener("change", (e) => {
+    const nextPlayer = e.target.value;
+    // save current player data first
+    savePlayerData(state.player);
+
+    state.player = nextPlayer;
+    saveActivePlayer(nextPlayer);
+
+    const pd2 = loadPlayerData(nextPlayer);
+    state.score = pd2.score;
+    state.wrong = pd2.wrong;
+    updateStats();
+
+    // 切玩家立即換題（避免把上一位的題留著）
+    startRound();
+  });
+
+  els.btnResetPlayer?.addEventListener("click", () => {
+    if (!confirm(`要清除「${state.player}」的分數/錯誤嗎？`)) return;
+    resetCurrentPlayer();
+  });
 }
 
 // ---------- init ----------
@@ -481,7 +573,7 @@ function bindUI() {
     state.ttsOn = !!e.target.checked;
   });
 
-  // iOS/Safari 某些情況要 user gesture 後 voices 才會就緒
+  // voices warm-up
   document.addEventListener("click", () => {
     try { window.speechSynthesis.getVoices(); } catch (_) {}
   }, { once: true });
@@ -489,10 +581,10 @@ function bindUI() {
 
 (async function init() {
   bindUI();
+  initPlayersUI();
 
   try {
     state.data = await loadData();
-    updateStats();
     showMode(1);
     startRound();
   } catch (err) {
