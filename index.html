@@ -29,6 +29,7 @@
     <span class="playerLabel">玩家</span>
     <select id="playerSelect" class="playerSelect"></select>
     <button id="btnResetPlayer" class="ghost smallBtn" title="只清除目前玩家的分數/錯誤">清除本玩家</button>
+    <button id="btnWrongbook" class="ghost smallBtn" title="查看各模式錯題與再練">錯題本</button>
   </div>
 
   <div class="spacer"></div>
@@ -82,6 +83,50 @@
         <div id="sequenceBar" class="sequenceBar"></div>
         <div id="grid3" class="grid"></div>
       </section>
+<section id="wrongbookPanel" class="wrongbook hidden">
+  <div class="wbHeader">
+    <div>
+      <div class="wbTitle">錯題本（<span id="wbPlayerName"></span>）</div>
+      <div class="wbSub">依照玩家分開記錄。可直接「錯題再練」。</div>
+    </div>
+    <div class="wbActions">
+      <button id="btnCloseWrongbook" class="ghost">關閉</button>
+    </div>
+  </div>
+
+  <div class="wbGrid">
+    <div class="wbCard">
+      <div class="wbCardTitle">模式1：聽音選（答錯題）</div>
+      <div class="wbList" id="wbM1List"></div>
+      <div class="wbCardActions">
+        <button id="btnPracticeM1" class="modeBtn">錯題再練（模式1）</button>
+        <button id="btnClearM1" class="ghost">清除此區</button>
+      </div>
+    </div>
+
+    <div class="wbCard">
+      <div class="wbCardTitle">模式2/3：常點錯符號（誤點統計）</div>
+      <div class="wbList" id="wbMisclickList"></div>
+      <div class="wbCardActions">
+        <button id="btnPracticeMisclick" class="modeBtn">用常錯符號練（模式2）</button>
+        <button id="btnClearMisclick" class="ghost">清除此區</button>
+      </div>
+    </div>
+
+    <div class="wbCard">
+      <div class="wbCardTitle">模式3：卡關序列（點錯次數）</div>
+      <div class="wbList" id="wbSeqList"></div>
+      <div class="wbCardActions">
+        <button id="btnPracticeSeq" class="modeBtn">練卡關序列（模式3）</button>
+        <button id="btnClearSeq" class="ghost">清除此區</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wbTip">
+    小提醒：<strong>錯題再練</strong>會在答對後逐步把錯題數扣回去（越練越少）。
+  </div>
+</section>
     </main>
 
     <footer class="footer">
