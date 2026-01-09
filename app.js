@@ -229,7 +229,7 @@ u.volume = 0.55;
   if (preferred) u.voice = preferred;
 
   window.speechSynthesis.speak(u);
-}
+
 
 // ---------- storage ----------
 function loadActivePlayer() {
