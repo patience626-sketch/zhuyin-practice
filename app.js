@@ -1,9 +1,11 @@
 // 注音練習小遊戲（GitHub Pages / 純前端）
 // ✅ 模式1：聽音選（答對自動下一題）
-// ✅ 模式2：找出全部目標（目標多個）
-// ✅ 模式3：依序散找（點錯閃紅，保留進度）
-// ✅ 5位玩家（西瓜/柚子/小樂/阿噗/安安）各自獨立保存
-// ✅ 錯題本（每玩家）+ 錯題再練（會扣回錯題數）
+// ✅ 模式2：找出全部目標（找完自動下一題）
+// ✅ 模式3：依序散找（點錯閃紅、保留進度）
+// ✅ 5位玩家（西瓜/柚子/小樂/阿噗/安安）獨立分數/錯題本（localStorage）
+// ✅ 錯題本 + 錯題再練（答對會扣回錯題數）
+// ✅ TTS 速度 UI（slow/normal/fast，記住設定）
+// ✅ 音檔優先播放：./audio/zhuyin/<符號>.mp3，沒有才 fallback TTS
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -16,6 +18,7 @@ const els = {
   btnReplay: $("#btnReplay"),
   soundToggle: $("#soundToggle"),
   ttsToggle: $("#ttsToggle"),
+  ttsSpeedSelect: $("#ttsSpeedSelect"),
   modeBtns: Array.from(document.querySelectorAll(".modeBtn")),
   mode1: $("#mode1"),
   mode2: $("#mode2"),
@@ -26,7 +29,6 @@ const els = {
   m2Progress: $("#m2Progress"),
   m3Progress: $("#m3Progress"),
   sequenceBar: $("#sequenceBar"),
-  ttsSpeedSelect: $("#ttsSpeedSelect"),
 
   // players
   playerSelect: $("#playerSelect"),
@@ -49,17 +51,12 @@ const els = {
 };
 
 const PLAYERS = ["西瓜", "柚子", "小樂", "阿噗", "安安"];
-const STORAGE_PREFIX = "zhuyin_game_v2"; // v2 because we add wrongbook structure
+const STORAGE_PREFIX = "zhuyin_game_v3";
 const KEY_ACTIVE_PLAYER = `${STORAGE_PREFIX}:active_player`;
-function keyForPlayer(player) { return `${STORAGE_PREFIX}:player:${player}`; }
 const KEY_TTS_SPEED = `${STORAGE_PREFIX}:tts_speed`;
-function loadTtsSpeed() {
-  const v = localStorage.getItem(KEY_TTS_SPEED);
-  if (v === "slow" || v === "normal" || v === "fast") return v;
-  return "normal";
-}
-function saveTtsSpeed(v) {
-  localStorage.setItem(KEY_TTS_SPEED, v);
+
+function keyForPlayer(player) {
+  return `${STORAGE_PREFIX}:player:${player}`;
 }
 
 const GRID_COLS = 7;
@@ -71,30 +68,27 @@ const state = {
   // settings
   soundOn: true,
   ttsOn: true,
-  ttsSpeed: "normal", // "slow" | "normal" | "fast"
+  ttsSpeed: "normal", // slow | normal | fast
 
   // player
   player: PLAYERS[0],
   score: 0,
   wrong: 0,
 
-  // wrongbook (in-memory, saved per player)
+  // wrongbook (per player)
   wb: {
-    // mode1 wrong targets: {sym: count}
-    m1Wrong: {},
-    // misclicks (mode2 + mode3): {sym: count}
-    misclick: {},
-    // mode3 sequence fail counts: {"ㄅㄆㄇ": count}
-    seqFail: {}
+    m1Wrong: {},   // {sym: count}
+    misclick: {},  // {sym: count}
+    seqFail: {},   // {"ㄅㄆㄇ": count}
   },
 
-  // practice mode flags/queues
+  // practice state
   practice: {
     active: false,
-    type: null, // "m1" | "misclick" | "seq"
-    m1Queue: [], // symbols to practice in mode1
-    misclickTarget: null, // one symbol to practice in mode2
-    seq: null, // sequence array to practice in mode3
+    type: null,          // "m1" | "misclick" | "seq"
+    m1Queue: [],
+    misclickTarget: null,
+    seq: null,
   },
 
   // mode1
@@ -104,7 +98,7 @@ const state = {
   m2: { level: null },
 
   // mode3
-  m3: { level: null, stepIndex: 0 }
+  m3: { level: null, stepIndex: 0 },
 };
 
 // ---------- utils ----------
@@ -124,20 +118,23 @@ function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 function setGridCols(el, cols) {
-  if (el) el.style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
+  if (el) el.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 }
 function setQuestion(title, sub = "") {
-  els.qTitle.textContent = title;
-  els.qSub.textContent = sub;
+  if (els.qTitle) els.qTitle.textContent = title;
+  if (els.qSub) els.qSub.textContent = sub;
 }
 function showMode(mode) {
   state.mode = mode;
-  els.mode1.classList.toggle("hidden", mode !== 1);
-  els.mode2.classList.toggle("hidden", mode !== 2);
-  els.mode3.classList.toggle("hidden", mode !== 3);
-  els.modeBtns.forEach(btn => btn.classList.toggle("active", Number(btn.dataset.mode) === mode));
+  if (els.mode1) els.mode1.classList.toggle("hidden", mode !== 1);
+  if (els.mode2) els.mode2.classList.toggle("hidden", mode !== 2);
+  if (els.mode3) els.mode3.classList.toggle("hidden", mode !== 3);
+  els.modeBtns.forEach((btn) =>
+    btn.classList.toggle("active", Number(btn.dataset.mode) === mode)
+  );
 }
 function flashWrong(dom) {
+  if (!dom) return;
   dom.classList.add("flash-wrong");
   setTimeout(() => dom.classList.remove("flash-wrong"), 450);
 }
@@ -147,49 +144,54 @@ function incCount(map, key, delta = 1) {
 }
 function topEntries(map, limit = 12) {
   return Object.entries(map)
-    .sort((a, b) => (b[1] - a[1]) || (a[0].localeCompare(b[0], "zh-Hant")))
+    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], "zh-Hant"))
     .slice(0, limit);
 }
 
 // ---------- stats ----------
 function updateStats() {
-  els.score.textContent = String(state.score);
-  els.wrong.textContent = String(state.wrong);
+  if (els.score) els.score.textContent = String(state.score);
+  if (els.wrong) els.wrong.textContent = String(state.wrong);
 }
 
-// ---------- sound ----------
+// ---------- beeps ----------
 let audioCtx = null;
 function beep(type = "good") {
   if (!state.soundOn) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx =
+      audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = "sine";
-    o.frequency.value = (type === "good") ? 880 : 220;
+    o.frequency.value = type === "good" ? 880 : 220;
     g.gain.value = 0.04;
-    o.connect(g); g.connect(audioCtx.destination);
+    o.connect(g);
+    g.connect(audioCtx.destination);
     o.start();
-    setTimeout(() => { o.stop(); o.disconnect(); g.disconnect(); }, 110);
+    setTimeout(() => {
+      o.stop();
+      o.disconnect();
+      g.disconnect();
+    }, 110);
   } catch (_) {}
 }
 
+// ---------- audio first, TTS fallback ----------
 function speakZhuyin(text) {
   if (!text) return;
 
-  // 優先使用音檔
+  // 音檔優先：路徑為 ./audio/zhuyin/<符號>.mp3
   const audioPath = `./audio/zhuyin/${text}.mp3`;
-  const audio = new Audio(audioPath);
+  const a = new Audio(audioPath);
+  a.volume = 1.0;
 
-  audio.volume = 1.0;
-
-  audio.play().catch(() => {
-    // 如果沒有音檔或播放失敗 → fallback 用 TTS
+  a.play().catch(() => {
+    // 沒音檔或播放失敗才用 TTS
     fallbackTTS(text);
   });
 }
 
-// 原本的 TTS 改成 fallback
 function fallbackTTS(text) {
   if (!state.ttsOn) return;
   if (!("speechSynthesis" in window)) return;
@@ -197,39 +199,21 @@ function fallbackTTS(text) {
   window.speechSynthesis.cancel();
 
   const u = new SpeechSynthesisUtterance(text);
-  const rateMap = { slow: 0.6, normal: 0.75, fast: 0.95 };
+  const rateMap = { slow: 0.60, normal: 0.75, fast: 0.95 };
   u.rate = rateMap[state.ttsSpeed] ?? 0.75;
   u.pitch = 1.0;
   u.volume = 1.0;
 
   const voices = window.speechSynthesis.getVoices?.() || [];
   const preferred =
-    voices.find(v => v.lang.includes("zh-TW")) ||
-    voices.find(v => v.lang.includes("zh")) ||
+    voices.find((v) => (v.lang || "").toLowerCase().includes("zh-tw")) ||
+    voices.find((v) => (v.lang || "").toLowerCase().includes("zh-hant")) ||
+    voices.find((v) => (v.lang || "").toLowerCase().startsWith("zh")) ||
     null;
-
   if (preferred) u.voice = preferred;
+
   window.speechSynthesis.speak(u);
 }
-
-
-  const u = new SpeechSynthesisUtterance(text);
-  const rateMap = { slow: 0.60, normal: 0.75, fast: 0.95 };
-u.rate = rateMap[state.ttsSpeed] ?? 0.75;
-u.pitch = 0.55;
-u.volume = 0.55;
-
-
-  const voices = window.speechSynthesis.getVoices?.() || [];
-  const preferred =
-    voices.find(v => (v.lang || "").toLowerCase().includes("zh-tw")) ||
-    voices.find(v => (v.lang || "").toLowerCase().includes("zh-hant")) ||
-    voices.find(v => (v.lang || "").toLowerCase().startsWith("zh")) ||
-    null;
-  if (preferred) u.voice = preferred;
-
-  window.speechSynthesis.speak(u);
-
 
 // ---------- storage ----------
 function loadActivePlayer() {
@@ -239,6 +223,15 @@ function loadActivePlayer() {
 }
 function saveActivePlayer(player) {
   localStorage.setItem(KEY_ACTIVE_PLAYER, player);
+}
+
+function loadTtsSpeed() {
+  const v = localStorage.getItem(KEY_TTS_SPEED);
+  if (v === "slow" || v === "normal" || v === "fast") return v;
+  return "normal";
+}
+function saveTtsSpeed(v) {
+  localStorage.setItem(KEY_TTS_SPEED, v);
 }
 
 function loadPlayerData(player) {
@@ -254,18 +247,19 @@ function loadPlayerData(player) {
       wb: {
         m1Wrong: obj?.wb?.m1Wrong || {},
         misclick: obj?.wb?.misclick || {},
-        seqFail: obj?.wb?.seqFail || {}
-      }
+        seqFail: obj?.wb?.seqFail || {},
+      },
     };
   } catch (_) {
     return { score: 0, wrong: 0, wb: { m1Wrong: {}, misclick: {}, seqFail: {} } };
   }
 }
+
 function savePlayerData(player) {
   const payload = {
     score: state.score,
     wrong: state.wrong,
-    wb: state.wb
+    wb: state.wb,
   };
   localStorage.setItem(keyForPlayer(player), JSON.stringify(payload));
 }
@@ -274,7 +268,13 @@ function resetCurrentPlayerAll() {
   state.score = 0;
   state.wrong = 0;
   state.wb = { m1Wrong: {}, misclick: {}, seqFail: {} };
-  state.practice = { active: false, type: null, m1Queue: [], misclickTarget: null, seq: null };
+  state.practice = {
+    active: false,
+    type: null,
+    m1Queue: [],
+    misclickTarget: null,
+    seq: null,
+  };
   savePlayerData(state.player);
   updateStats();
   renderWrongbook();
@@ -295,62 +295,69 @@ async function loadData() {
   return await res.json();
 }
 
-// ---------- Wrongbook UI ----------
+// ---------- wrongbook UI ----------
 function showWrongbook(open) {
-  els.wrongbookPanel?.classList.toggle("hidden", !open);
+  if (!els.wrongbookPanel) return;
+  els.wrongbookPanel.classList.toggle("hidden", !open);
   if (open) renderWrongbook();
 }
 
 function renderWrongbook() {
   if (!els.wrongbookPanel) return;
 
-  els.wbPlayerName.textContent = state.player;
+  if (els.wbPlayerName) els.wbPlayerName.textContent = state.player;
 
   // Mode1 wrong targets
   const m1Top = topEntries(state.wb.m1Wrong, 18);
-  els.wbM1List.innerHTML = "";
-  if (m1Top.length === 0) {
-    els.wbM1List.innerHTML = `<div class="wbEmpty">目前沒有模式1錯題 🎉</div>`;
-  } else {
-    m1Top.forEach(([sym, c]) => {
-      const tag = document.createElement("div");
-      tag.className = "wbTag";
-      tag.innerHTML = `<span>${sym}</span><span class="wbCount">×${c}</span>`;
-      els.wbM1List.appendChild(tag);
-    });
+  if (els.wbM1List) {
+    els.wbM1List.innerHTML = "";
+    if (m1Top.length === 0) {
+      els.wbM1List.innerHTML = `<div class="wbEmpty">目前沒有模式1錯題 🎉</div>`;
+    } else {
+      m1Top.forEach(([sym, c]) => {
+        const tag = document.createElement("div");
+        tag.className = "wbTag";
+        tag.innerHTML = `<span>${sym}</span><span class="wbCount">×${c}</span>`;
+        els.wbM1List.appendChild(tag);
+      });
+    }
   }
 
-  // Misclick combined
+  // Misclick
   const misTop = topEntries(state.wb.misclick, 18);
-  els.wbMisclickList.innerHTML = "";
-  if (misTop.length === 0) {
-    els.wbMisclickList.innerHTML = `<div class="wbEmpty">目前沒有常點錯符號 🎉</div>`;
-  } else {
-    misTop.forEach(([sym, c]) => {
-      const tag = document.createElement("div");
-      tag.className = "wbTag";
-      tag.innerHTML = `<span>${sym}</span><span class="wbCount">×${c}</span>`;
-      els.wbMisclickList.appendChild(tag);
-    });
+  if (els.wbMisclickList) {
+    els.wbMisclickList.innerHTML = "";
+    if (misTop.length === 0) {
+      els.wbMisclickList.innerHTML = `<div class="wbEmpty">目前沒有常點錯符號 🎉</div>`;
+    } else {
+      misTop.forEach(([sym, c]) => {
+        const tag = document.createElement("div");
+        tag.className = "wbTag";
+        tag.innerHTML = `<span>${sym}</span><span class="wbCount">×${c}</span>`;
+        els.wbMisclickList.appendChild(tag);
+      });
+    }
   }
 
   // Seq fails
   const seqTop = topEntries(state.wb.seqFail, 12);
-  els.wbSeqList.innerHTML = "";
-  if (seqTop.length === 0) {
-    els.wbSeqList.innerHTML = `<div class="wbEmpty">目前沒有卡關序列 🎉</div>`;
-  } else {
-    seqTop.forEach(([seqKey, c]) => {
-      const pretty = seqKey.split("").join(" → ");
-      const tag = document.createElement("div");
-      tag.className = "wbTag";
-      tag.innerHTML = `<span>${pretty}</span><span class="wbCount">×${c}</span>`;
-      els.wbSeqList.appendChild(tag);
-    });
+  if (els.wbSeqList) {
+    els.wbSeqList.innerHTML = "";
+    if (seqTop.length === 0) {
+      els.wbSeqList.innerHTML = `<div class="wbEmpty">目前沒有卡關序列 🎉</div>`;
+    } else {
+      seqTop.forEach(([seqKey, c]) => {
+        const pretty = seqKey.split("").join(" → ");
+        const tag = document.createElement("div");
+        tag.className = "wbTag";
+        tag.innerHTML = `<span>${pretty}</span><span class="wbCount">×${c}</span>`;
+        els.wbSeqList.appendChild(tag);
+      });
+    }
   }
 }
 
-// ---------- Practice helpers ----------
+// ---------- practice starters ----------
 function startPracticeM1FromWrongbook() {
   const list = topEntries(state.wb.m1Wrong, 50).map(([sym]) => sym);
   if (list.length === 0) {
@@ -387,10 +394,9 @@ function startPracticeSeqAsMode3() {
     return;
   }
   const seqKey = top[0][0];
-  const sequence = seqKey.split("");
   state.practice.active = true;
   state.practice.type = "seq";
-  state.practice.seq = sequence;
+  state.practice.seq = seqKey.split("");
   showWrongbook(false);
   showMode(3);
   startRound();
@@ -399,7 +405,13 @@ function startPracticeSeqAsMode3() {
 function stopPracticeIfNoQueue() {
   if (!state.practice.active) return;
   if (state.practice.type === "m1" && state.practice.m1Queue.length === 0) {
-    state.practice = { active: false, type: null, m1Queue: [], misclickTarget: null, seq: null };
+    state.practice = {
+      active: false,
+      type: null,
+      m1Queue: [],
+      misclickTarget: null,
+      seq: null,
+    };
   }
 }
 
@@ -407,9 +419,7 @@ function stopPracticeIfNoQueue() {
 function refillM1Bag() {
   state.m1.bag = shuffle(state.data.zhuyin.slice());
 }
-
 function getNextM1Target() {
-  // If practicing mode1 wrongbook
   if (state.practice.active && state.practice.type === "m1") {
     if (state.practice.m1Queue.length > 0) return state.practice.m1Queue.shift();
     stopPracticeIfNoQueue();
@@ -420,17 +430,17 @@ function getNextM1Target() {
 
 function nextMode1() {
   const target = getNextM1Target();
-
-  const pool = state.data.zhuyin.filter(z => z !== target);
+  const pool = state.data.zhuyin.filter((z) => z !== target);
   const others = sampleUnique(pool, 3);
   const options = shuffle([target, ...others]);
 
   state.m1.current = { target, options };
   state.m1.locked = false;
 
-  const title = state.practice.active && state.practice.type === "m1"
-    ? `錯題再練（模式1｜${state.player}）`
-    : `模式 1：聽音選出正確注音（${state.player}）`;
+  const title =
+    state.practice.active && state.practice.type === "m1"
+      ? `錯題再練（模式1｜${state.player}）`
+      : `模式 1：聽音選出正確注音（${state.player}）`;
 
   setQuestion(title, "按「重播」聽發音，點選正確符號。答對自動下一題。");
   renderMode1();
@@ -438,11 +448,12 @@ function nextMode1() {
 }
 
 function renderMode1() {
+  if (!els.choices) return;
   els.choices.innerHTML = "";
   const cur = state.m1.current;
   if (!cur) return;
 
-  cur.options.forEach(sym => {
+  cur.options.forEach((sym) => {
     const btn = document.createElement("button");
     btn.className = "choice";
     btn.type = "button";
@@ -459,14 +470,13 @@ function renderMode1() {
         state.score += 10;
         updateStats();
 
-        // If this is practice, reduce wrong count for that target by 1 (reward)
+        // practice reward: reduce wrong count
         if (state.practice.active && state.practice.type === "m1") {
           incCount(state.wb.m1Wrong, cur.target, -1);
           renderWrongbook();
         }
 
         savePlayerData(state.player);
-
         state.m1.locked = true;
         setTimeout(() => startRound(), 380);
       } else {
@@ -476,7 +486,7 @@ function renderMode1() {
         state.wrong += 1;
         state.score = Math.max(0, state.score - 2);
 
-        // record wrongbook for mode1 target
+        // record wrong target
         incCount(state.wb.m1Wrong, cur.target, +1);
 
         updateStats();
@@ -504,7 +514,7 @@ function createMode2Level(targetOverride = null) {
   const targetCount = randInt(5, 10);
   const decoyUniqueCount = 14;
 
-  const decoyPool = zh.filter(z => z !== target);
+  const decoyPool = zh.filter((z) => z !== target);
   const decoyTypes = sampleUnique(decoyPool, decoyUniqueCount);
 
   const symbols = [];
@@ -518,7 +528,7 @@ function createMode2Level(targetOverride = null) {
     id: `m2_${Date.now()}_${idx}_${Math.random().toString(16).slice(2)}`,
     symbol: s,
     isTarget: s === target,
-    found: false
+    found: false,
   }));
 
   return { target, targetCount, foundCount: 0, cells };
@@ -538,22 +548,21 @@ function nextMode2() {
   setQuestion(title, `請找出所有「${state.m2.level.target}」`);
   updateMode2Progress();
   renderMode2();
-
   speakZhuyin(state.m2.level.target);
 }
 
 function updateMode2Progress() {
   const lv = state.m2.level;
-  if (!lv) return;
+  if (!lv || !els.m2Progress) return;
   els.m2Progress.textContent = `已找到 ${lv.foundCount} / ${lv.targetCount}`;
 }
 
 function renderMode2() {
   const lv = state.m2.level;
-  els.grid2.innerHTML = "";
-  if (!lv) return;
+  if (!lv || !els.grid2) return;
 
-  lv.cells.forEach(cell => {
+  els.grid2.innerHTML = "";
+  lv.cells.forEach((cell) => {
     const d = document.createElement("div");
     d.className = "cell";
     d.textContent = cell.symbol;
@@ -574,14 +583,12 @@ function renderMode2() {
         updateMode2Progress();
 
         if (lv.foundCount >= lv.targetCount) {
-          // If practicing misclick, reduce that symbol misclick count by 1 as reward
+          // practice reward: reduce misclick target count
           if (state.practice.active && state.practice.type === "misclick") {
             incCount(state.wb.misclick, lv.target, -1);
             renderWrongbook();
           }
-
           savePlayerData(state.player);
-
           setQuestion("🎉 找完了！", "自動進入下一題…");
           setTimeout(() => startRound(), 520);
         } else {
@@ -595,7 +602,6 @@ function renderMode2() {
 
         // record misclick symbol
         incCount(state.wb.misclick, cell.symbol, +1);
-
         savePlayerData(state.player);
         renderWrongbook();
 
@@ -614,11 +620,10 @@ function replayMode2() {
 
 // ---------- Mode 3 ----------
 function pickRandomSequence() {
-  // If practicing a specific seq
   if (state.practice.active && state.practice.type === "seq" && Array.isArray(state.practice.seq)) {
     return state.practice.seq.slice();
   }
-  const seqs = state.data.sequences || [["ㄅ","ㄆ","ㄇ"]];
+  const seqs = state.data.sequences || [["ㄅ", "ㄆ", "ㄇ"]];
   const chosen = seqs[randInt(0, seqs.length - 1)];
   return chosen.slice();
 }
@@ -630,7 +635,7 @@ function createMode3Level(sequence) {
   const allowExtraTargets = true;
 
   const seqSet = new Set(sequence);
-  const decoyPool = zh.filter(z => !seqSet.has(z));
+  const decoyPool = zh.filter((z) => !seqSet.has(z));
   const decoyTypes = sampleUnique(decoyPool, decoyUniqueCount);
 
   const symbols = sequence.slice();
@@ -650,7 +655,7 @@ function createMode3Level(sequence) {
   const cells = symbols.map((s, idx) => ({
     id: `m3_${Date.now()}_${idx}_${Math.random().toString(16).slice(2)}`,
     symbol: s,
-    done: false
+    done: false,
   }));
 
   return { sequence, cells };
@@ -679,7 +684,7 @@ function nextMode3() {
 
 function updateMode3ProgressExplain() {
   const lv = state.m3.level;
-  if (!lv) return;
+  if (!lv || !els.m3Progress) return;
   const idx = state.m3.stepIndex;
   const next = lv.sequence[idx] ?? "完成";
   els.m3Progress.textContent = `下一個：${next}（${Math.min(idx + 1, lv.sequence.length)}/${lv.sequence.length}）`;
@@ -687,7 +692,7 @@ function updateMode3ProgressExplain() {
 
 function renderSequenceBar() {
   const lv = state.m3.level;
-  if (!lv) return;
+  if (!lv || !els.sequenceBar) return;
 
   const idx = state.m3.stepIndex;
   els.sequenceBar.innerHTML = "";
@@ -704,13 +709,13 @@ function renderSequenceBar() {
 
 function renderMode3() {
   const lv = state.m3.level;
-  els.grid3.innerHTML = "";
-  if (!lv) return;
+  if (!lv || !els.grid3) return;
 
+  els.grid3.innerHTML = "";
   renderSequenceBar();
   updateMode3ProgressExplain();
 
-  lv.cells.forEach(cell => {
+  lv.cells.forEach((cell) => {
     const d = document.createElement("div");
     d.className = "cell";
     d.textContent = cell.symbol;
@@ -734,14 +739,12 @@ function renderMode3() {
         updateMode3ProgressExplain();
 
         if (state.m3.stepIndex >= lv.sequence.length) {
-          // practice reward: reduce seqFail by 1 if practicing
+          // practice reward: reduce seq fail count
           if (state.practice.active && state.practice.type === "seq") {
             incCount(state.wb.seqFail, seqKeyOf(lv.sequence), -1);
             renderWrongbook();
           }
-
           savePlayerData(state.player);
-
           setQuestion("🎉 序列完成！", "自動進入下一題…");
           setTimeout(() => startRound(), 560);
         } else {
@@ -755,13 +758,12 @@ function renderMode3() {
         beep("bad");
         updateStats();
 
-        // record misclick symbol + sequence fail
+        // record misclick + sequence fail
         incCount(state.wb.misclick, cell.symbol, +1);
         incCount(state.wb.seqFail, seqKeyOf(lv.sequence), +1);
 
         savePlayerData(state.player);
         renderWrongbook();
-
         flashWrong(d);
       }
     });
@@ -784,6 +786,7 @@ function startRound() {
   if (state.mode === 2) nextMode2();
   if (state.mode === 3) nextMode3();
 }
+
 function replay() {
   if (state.mode === 1) replayMode1();
   if (state.mode === 2) replayMode2();
@@ -795,7 +798,7 @@ function initPlayersUI() {
   if (!els.playerSelect) return;
 
   els.playerSelect.innerHTML = "";
-  PLAYERS.forEach(name => {
+  PLAYERS.forEach((name) => {
     const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = name;
@@ -825,81 +828,117 @@ function initPlayersUI() {
     state.wrong = pd2.wrong;
     state.wb = pd2.wb;
 
-    // stop practice when switching player (to avoid mixing)
-    state.practice = { active: false, type: null, m1Queue: [], misclickTarget: null, seq: null };
+    // switch player stops practice to avoid mixing
+    state.practice = {
+      active: false,
+      type: null,
+      m1Queue: [],
+      misclickTarget: null,
+      seq: null,
+    };
 
     updateStats();
     renderWrongbook();
     startRound();
   });
 
-  els.btnResetPlayer?.addEventListener("click", () => {
-    if (!confirm(`要清除「${state.player}」的分數/錯誤 + 錯題本嗎？`)) return;
-    resetCurrentPlayerAll();
-    startRound();
-  });
+  if (els.btnResetPlayer) {
+    els.btnResetPlayer.addEventListener("click", () => {
+      if (!confirm(`要清除「${state.player}」的分數/錯誤 + 錯題本嗎？`)) return;
+      resetCurrentPlayerAll();
+      startRound();
+    });
+  }
 }
 
 // ---------- wrongbook bindings ----------
 function bindWrongbook() {
-  els.btnWrongbook?.addEventListener("click", () => showWrongbook(true));
-  els.btnCloseWrongbook?.addEventListener("click", () => showWrongbook(false));
+  if (els.btnWrongbook) els.btnWrongbook.addEventListener("click", () => showWrongbook(true));
+  if (els.btnCloseWrongbook) els.btnCloseWrongbook.addEventListener("click", () => showWrongbook(false));
 
-  els.btnPracticeM1?.addEventListener("click", () => startPracticeM1FromWrongbook());
-  els.btnPracticeMisclick?.addEventListener("click", () => startPracticeMisclickAsMode2());
-  els.btnPracticeSeq?.addEventListener("click", () => startPracticeSeqAsMode3());
+  if (els.btnPracticeM1) els.btnPracticeM1.addEventListener("click", () => startPracticeM1FromWrongbook());
+  if (els.btnPracticeMisclick) els.btnPracticeMisclick.addEventListener("click", () => startPracticeMisclickAsMode2());
+  if (els.btnPracticeSeq) els.btnPracticeSeq.addEventListener("click", () => startPracticeSeqAsMode3());
 
-  els.btnClearM1?.addEventListener("click", () => {
-    if (!confirm("要清除「模式1錯題」嗎？")) return;
-    clearWrongbookSection("m1");
-  });
-  els.btnClearMisclick?.addEventListener("click", () => {
-    if (!confirm("要清除「常點錯符號」嗎？")) return;
-    clearWrongbookSection("misclick");
-  });
-  els.btnClearSeq?.addEventListener("click", () => {
-    if (!confirm("要清除「卡關序列」嗎？")) return;
-    clearWrongbookSection("seq");
-  });
+  if (els.btnClearM1) {
+    els.btnClearM1.addEventListener("click", () => {
+      if (!confirm("要清除「模式1錯題」嗎？")) return;
+      clearWrongbookSection("m1");
+    });
+  }
+  if (els.btnClearMisclick) {
+    els.btnClearMisclick.addEventListener("click", () => {
+      if (!confirm("要清除「常點錯符號」嗎？")) return;
+      clearWrongbookSection("misclick");
+    });
+  }
+  if (els.btnClearSeq) {
+    els.btnClearSeq.addEventListener("click", () => {
+      if (!confirm("要清除「卡關序列」嗎？")) return;
+      clearWrongbookSection("seq");
+    });
+  }
 }
 
-// ---------- init ----------
+// ---------- bind UI ----------
 function bindUI() {
-  els.modeBtns.forEach(btn => {
+  // mode switching
+  els.modeBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       const m = Number(btn.dataset.mode);
       showMode(m);
-      // changing mode stops practice (避免混淆)
-      state.practice = { active: false, type: null, m1Queue: [], misclickTarget: null, seq: null };
+
+      // switching mode stops practice (避免混淆)
+      state.practice = {
+        active: false,
+        type: null,
+        m1Queue: [],
+        misclickTarget: null,
+        seq: null,
+      };
+
       startRound();
     });
   });
 
-  els.btnNew.addEventListener("click", () => {
-    // manual next stops practice too (可自行調整)
-    startRound();
-  });
-  els.btnReplay.addEventListener("click", () => replay());
+  if (els.btnNew) els.btnNew.addEventListener("click", () => startRound());
+  if (els.btnReplay) els.btnReplay.addEventListener("click", () => replay());
 
-  els.soundToggle.addEventListener("change", (e) => { state.soundOn = !!e.target.checked; });
-  els.ttsToggle.addEventListener("change", (e) => { state.ttsOn = !!e.target.checked; });
-// 初始化速度（讀取記憶）
-state.ttsSpeed = loadTtsSpeed();
-if (els.ttsSpeedSelect) {
-  els.ttsSpeedSelect.value = state.ttsSpeed;
-  els.ttsSpeedSelect.addEventListener("change", (e) => {
-    const v = e.target.value;
-    state.ttsSpeed = v;
-    saveTtsSpeed(v);
-  });
+  if (els.soundToggle) {
+    els.soundToggle.addEventListener("change", (e) => {
+      state.soundOn = !!e.target.checked;
+    });
+  }
+  if (els.ttsToggle) {
+    els.ttsToggle.addEventListener("change", (e) => {
+      state.ttsOn = !!e.target.checked;
+    });
+  }
+
+  // TTS speed UI
+  state.ttsSpeed = loadTtsSpeed();
+  if (els.ttsSpeedSelect) {
+    els.ttsSpeedSelect.value = state.ttsSpeed;
+    els.ttsSpeedSelect.addEventListener("change", (e) => {
+      const v = e.target.value;
+      state.ttsSpeed = v;
+      saveTtsSpeed(v);
+    });
+  }
+
+  // warm-up voices (some browsers load voices lazily)
+  document.addEventListener(
+    "click",
+    () => {
+      try {
+        window.speechSynthesis.getVoices();
+      } catch (_) {}
+    },
+    { once: true }
+  );
 }
 
-  // voices warm-up
-  document.addEventListener("click", () => {
-    try { window.speechSynthesis.getVoices(); } catch (_) {}
-  }, { once: true });
-}
-
+// ---------- init ----------
 (async function init() {
   bindUI();
   bindWrongbook();
