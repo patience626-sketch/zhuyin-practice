@@ -175,9 +175,43 @@ function beep(type = "good") {
 }
 
 function speakZhuyin(text) {
+  if (!text) return;
+
+  // 優先使用音檔
+  const audioPath = `./audio/zhuyin/${text}.mp3`;
+  const audio = new Audio(audioPath);
+
+  audio.volume = 1.0;
+
+  audio.play().catch(() => {
+    // 如果沒有音檔或播放失敗 → fallback 用 TTS
+    fallbackTTS(text);
+  });
+}
+
+// 原本的 TTS 改成 fallback
+function fallbackTTS(text) {
   if (!state.ttsOn) return;
   if (!("speechSynthesis" in window)) return;
+
   window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  const rateMap = { slow: 0.6, normal: 0.75, fast: 0.95 };
+  u.rate = rateMap[state.ttsSpeed] ?? 0.75;
+  u.pitch = 1.0;
+  u.volume = 1.0;
+
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  const preferred =
+    voices.find(v => v.lang.includes("zh-TW")) ||
+    voices.find(v => v.lang.includes("zh")) ||
+    null;
+
+  if (preferred) u.voice = preferred;
+  window.speechSynthesis.speak(u);
+}
+
 
   const u = new SpeechSynthesisUtterance(text);
   const rateMap = { slow: 0.60, normal: 0.75, fast: 0.95 };
