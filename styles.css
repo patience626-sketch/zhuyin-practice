@@ -275,3 +275,93 @@ body{
   cursor:pointer;
 }
 .smallBtn{ padding: 8px 10px; }
+
+.wrongbook{
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 18px;
+  border:1px solid var(--line);
+  background: rgba(15,23,41,0.72);
+}
+
+.wbHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  padding: 6px 6px 10px;
+}
+
+.wbTitle{
+  font-weight: 900;
+  font-size: 16px;
+}
+.wbSub{
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wbGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 10px;
+}
+
+@media (max-width: 900px){
+  .wbGrid{ grid-template-columns: 1fr; }
+}
+
+.wbCard{
+  border:1px solid var(--line);
+  background: rgba(18,26,44,0.75);
+  border-radius: 16px;
+  padding: 12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.wbCardTitle{
+  font-weight: 900;
+}
+
+.wbList{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  min-height: 44px;
+}
+
+.wbTag{
+  padding: 8px 10px;
+  border-radius: 999px;
+  border:1px solid var(--line);
+  background: rgba(15,23,41,0.92);
+  font-weight: 900;
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.wbCount{
+  color: var(--warn);
+  font-weight: 900;
+}
+
+.wbEmpty{
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wbCardActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.wbTip{
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align:center;
+}
