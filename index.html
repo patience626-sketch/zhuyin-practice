@@ -21,15 +21,21 @@
     </header>
 
     <nav class="modes">
-      <button class="modeBtn active" data-mode="1">模式 1：聽音選</button>
-      <button class="modeBtn" data-mode="2">模式 2：找出全部</button>
-      <button class="modeBtn" data-mode="3">模式 3：依序散找</button>
+  <button class="modeBtn active" data-mode="1">模式 1：聽音選</button>
+  <button class="modeBtn" data-mode="2">模式 2：找出全部</button>
+  <button class="modeBtn" data-mode="3">模式 3：依序散找</button>
 
-      <div class="spacer"></div>
+  <div class="playerWrap">
+    <span class="playerLabel">玩家</span>
+    <select id="playerSelect" class="playerSelect"></select>
+    <button id="btnResetPlayer" class="ghost smallBtn" title="只清除目前玩家的分數/錯誤">清除本玩家</button>
+  </div>
 
-      <button id="btnNew" class="ghost">下一題</button>
-      <button id="btnReplay" class="ghost">重播/再念一次</button>
-    </nav>
+  <div class="spacer"></div>
+
+  <button id="btnNew" class="ghost">下一題</button>
+  <button id="btnReplay" class="ghost">重播/再念一次</button>
+</nav>
 
     <main class="panel">
       <section class="question">
