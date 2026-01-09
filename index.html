@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>注音練習小遊戲（GitHub Pages）</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="title">注音練習小遊戲</div>
+        <div class="subtitle">模式 1 聽音選｜模式 2 找出全部目標｜模式 3 依序散找（保留進度）</div>
+      </div>
+
+      <div class="stats">
+        <div class="chip">分數 <span id="score">0</span></div>
+        <div class="chip">錯誤 <span id="wrong">0</span></div>
+      </div>
+    </header>
+
+    <nav class="modes">
+      <button class="modeBtn active" data-mode="1">模式 1：聽音選</button>
+      <button class="modeBtn" data-mode="2">模式 2：找出全部</button>
+      <button class="modeBtn" data-mode="3">模式 3：依序散找</button>
+
+      <div class="spacer"></div>
+
+      <button id="btnNew" class="ghost">下一題</button>
+      <button id="btnReplay" class="ghost">重播/再念一次</button>
+    </nav>
+
+    <main class="panel">
+      <section class="question">
+        <div class="q-left">
+          <div class="q-title" id="qTitle">載入中...</div>
+          <div class="q-sub" id="qSub"> </div>
+        </div>
+
+        <div class="q-right">
+          <label class="toggle">
+            <input type="checkbox" id="soundToggle" checked />
+            <span>音效</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="ttsToggle" checked />
+            <span>TTS 念出注音</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Mode 1 -->
+      <section id="mode1" class="modeSection">
+        <div class="row">
+          <div class="hint">按「重播」可再聽一次。答對會自動跳題。</div>
+        </div>
+        <div id="choices" class="choices"></div>
+      </section>
+
+      <!-- Mode 2 -->
+      <section id="mode2" class="modeSection hidden">
+        <div class="row">
+          <div class="hint">把所有目標都找出來才過關。點錯會閃紅。</div>
+          <div class="progress" id="m2Progress"></div>
+        </div>
+        <div id="grid2" class="grid"></div>
+      </section>
+
+      <!-- Mode 3 -->
+      <section id="mode3" class="modeSection hidden">
+        <div class="row">
+          <div class="hint">依序點出目標序列（散在符號海裡）。點錯閃紅，但<strong>保留進度</strong>。</div>
+          <div class="progress" id="m3Progress"></div>
+        </div>
+        <div id="sequenceBar" class="sequenceBar"></div>
+        <div id="grid3" class="grid"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="small">
+        Tips：手機也能玩。若 TTS 沒聲音，先按一次「重播」並允許瀏覽器播放語音。
+      </div>
+    </footer>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
