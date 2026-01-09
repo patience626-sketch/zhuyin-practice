@@ -376,50 +376,42 @@ body{
 }
 
 /* =========================
-   🌞 強制淺色主題（覆蓋深色）
+   🧸 親子柔和配色 + 放大按鈕（覆蓋用）
+   貼在 styles.css 最底部
    ========================= */
 
-/* 全站背景 */
-body{
-  background: #f6f7fb !important;
-  color: #1b2430 !important;
+:root{
+  --kid-bg: #fbf7f1;        /* 奶茶底 */
+  --kid-card: #ffffff;      /* 白卡 */
+  --kid-soft: #fff2df;      /* 淡奶油 */
+  --kid-soft2:#f3f7ff;      /* 淡天空 */
+  --kid-text:#2b2b2b;       /* 深灰字 */
+  --kid-muted:#6b7280;      /* 次要字 */
+  --kid-line:#eadfce;       /* 邊框 */
+  --kid-good:#2fbf84;       /* 成功 */
+  --kid-bad:#e45b73;        /* 錯誤 */
+  --kid-warn:#c08a2a;       /* 提示 */
 }
 
-/* 所有主要容器一律白底 */
+/* 全站底色（去掉深色漸層） */
+body{
+  background: var(--kid-bg) !important;
+  color: var(--kid-text) !important;
+}
+
+/* 主要容器：白底卡片感 */
 .topbar,
 .modes,
 .panel,
 .question,
-.modeSection,
 .wrongbook,
 .wbCard{
-  background: #ffffff !important;
-  border: 1px solid #d8e1ee !important;
+  background: var(--kid-card) !important;
+  border: 1px solid var(--kid-line) !important;
+  box-shadow: 0 6px 18px rgba(80,60,30,0.08) !important;
 }
 
-/* 卡片、按鈕、格子 */
-.choice,
-.cell,
-.chip,
-.modeBtn,
-.ghost,
-.playerWrap,
-.seqItem,
-.wbTag{
-  background: #ffffff !important;
-  color: #1b2430 !important;
-  border: 1px solid #d8e1ee !important;
-}
-
-/* hover 不要變暗 */
-.choice:hover,
-.cell:hover,
-.modeBtn:hover,
-.ghost:hover{
-  background: #f0f4ff !important;
-}
-
-/* 次要文字 */
+/* 標題、次要文字 */
 .subtitle,
 .q-sub,
 .hint,
@@ -427,19 +419,138 @@ body{
 .wbSub,
 .wbTip,
 .playerLabel{
-  color: #5a6b7d !important;
+  color: var(--kid-muted) !important;
 }
 
-/* 進度、提示色 */
-.progress{
-  color: #b88700 !important;
+/* 模式按鈕（放大、圓潤、柔和） */
+.modeBtn,
+.ghost{
+  background: var(--kid-soft2) !important;
+  color: var(--kid-text) !important;
+  border: 1px solid var(--kid-line) !important;
+
+  padding: 14px 18px !important;     /* ✅ 放大 */
+  border-radius: 18px !important;     /* ✅ 更圓 */
+  font-size: 16px !important;         /* ✅ 字變大 */
+  font-weight: 900 !important;
 }
 
-/* 成功 / 錯誤 */
-.choice.correct,
+/* active 模式：奶油色突出 */
+.modeBtn.active{
+  background: var(--kid-soft) !important;
+  border-color: rgba(192,138,42,0.55) !important;
+  box-shadow: 0 0 0 3px rgba(192,138,42,0.12) inset !important;
+}
+
+/* hover */
+.modeBtn:hover,
+.ghost:hover{
+  background: #eef5ff !important;
+  border-color: #d8d1c2 !important;
+}
+
+/* 玩家選單區塊 */
+.playerWrap{
+  background: #ffffff !important;
+  border: 1px solid var(--kid-line) !important;
+}
+.playerSelect,
+#ttsSpeedSelect{
+  background: #ffffff !important;
+  color: var(--kid-text) !important;
+  border: 1px solid var(--kid-line) !important;
+
+  padding: 10px 12px !important;     /* ✅ 放大 */
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+}
+
+/* 分數 chip */
+.chip{
+  background: var(--kid-soft2) !important;
+  border: 1px solid var(--kid-line) !important;
+  color: var(--kid-text) !important;
+  font-size: 14px !important;
+  padding: 10px 12px !important;     /* ✅ 放大 */
+}
+
+/* 模式1 選項按鈕（大顆、好點） */
+.choice{
+  background: #ffffff !important;
+  border: 2px solid var(--kid-line) !important;
+
+  min-height: 96px !important;       /* ✅ 放大高度 */
+  font-size: 44px !important;        /* ✅ 符號變大 */
+  border-radius: 22px !important;
+}
+
+/* 模式2/3 格子（大顆、好點） */
+.cell{
+  background: #ffffff !important;
+  border: 2px solid var(--kid-line) !important;
+
+  min-height: 74px !important;       /* ✅ 放大高度 */
+  font-size: 34px !important;        /* ✅ 符號變大 */
+  border-radius: 18px !important;
+}
+
+/* 找到後：更淡 */
 .cell.found{
-  border-color: #1fbf82 !important;
+  opacity: 0.45 !important;
+  border-color: rgba(47,191,132,0.6) !important;
+}
+
+/* 序列 pill 更大 */
+.seqItem{
+  background: var(--kid-soft2) !important;
+  border: 1px solid var(--kid-line) !important;
+  padding: 10px 14px !important;     /* ✅ 放大 */
+  font-size: 16px !important;
+}
+.seqItem.next{
+  border-color: rgba(192,138,42,0.65) !important;
+  box-shadow: 0 0 0 3px rgba(192,138,42,0.12) inset !important;
+}
+
+/* 錯題本 tag 更大 */
+.wbTag{
+  background: #ffffff !important;
+  border: 1px solid var(--kid-line) !important;
+  padding: 10px 12px !important;     /* ✅ 放大 */
+  font-size: 16px !important;
+}
+.wbCount{
+  color: var(--kid-warn) !important;
+}
+
+/* 成功/錯誤顏色 */
+.choice.correct{
+  border-color: var(--kid-good) !important;
+  box-shadow: 0 0 0 4px rgba(47,191,132,.14) inset !important;
 }
 .flash-wrong{
-  border-color: #e64b6a !important;
+  border-color: var(--kid-bad) !important;
+}
+
+/* 進度提示 */
+.progress{
+  color: var(--kid-warn) !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+}
+
+/* 手機：格子再大一點、欄數改少更好點 */
+@media (max-width: 520px){
+  .grid{
+    grid-template-columns: repeat(5, minmax(0,1fr)) !important;
+  }
+  .cell{
+    min-height: 78px !important;
+    font-size: 36px !important;
+  }
+  .choice{
+    min-height: 92px !important;
+    font-size: 42px !important;
+  }
 }
