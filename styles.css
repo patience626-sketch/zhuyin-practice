@@ -365,3 +365,12 @@ body{
   font-size: 13px;
   text-align:center;
 }
+
+#ttsSpeedSelect{
+  border:1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-weight: 800;
+  background: var(--card2);
+  color: var(--text);
+}
