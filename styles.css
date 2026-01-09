@@ -374,3 +374,72 @@ body{
   background: var(--card2);
   color: var(--text);
 }
+
+/* =========================
+   🌞 強制淺色主題（覆蓋深色）
+   ========================= */
+
+/* 全站背景 */
+body{
+  background: #f6f7fb !important;
+  color: #1b2430 !important;
+}
+
+/* 所有主要容器一律白底 */
+.topbar,
+.modes,
+.panel,
+.question,
+.modeSection,
+.wrongbook,
+.wbCard{
+  background: #ffffff !important;
+  border: 1px solid #d8e1ee !important;
+}
+
+/* 卡片、按鈕、格子 */
+.choice,
+.cell,
+.chip,
+.modeBtn,
+.ghost,
+.playerWrap,
+.seqItem,
+.wbTag{
+  background: #ffffff !important;
+  color: #1b2430 !important;
+  border: 1px solid #d8e1ee !important;
+}
+
+/* hover 不要變暗 */
+.choice:hover,
+.cell:hover,
+.modeBtn:hover,
+.ghost:hover{
+  background: #f0f4ff !important;
+}
+
+/* 次要文字 */
+.subtitle,
+.q-sub,
+.hint,
+.small,
+.wbSub,
+.wbTip,
+.playerLabel{
+  color: #5a6b7d !important;
+}
+
+/* 進度、提示色 */
+.progress{
+  color: #b88700 !important;
+}
+
+/* 成功 / 錯誤 */
+.choice.correct,
+.cell.found{
+  border-color: #1fbf82 !important;
+}
+.flash-wrong{
+  border-color: #e64b6a !important;
+}
